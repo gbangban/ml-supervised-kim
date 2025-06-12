@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np 
+import geopandas as gpd
+from shapely.geometry import Point
+from pyproj import Transformer
 
 null_strings = ['(null)','#N/A', 'NA', '?', '', ' ', '&&', 'nan']
 
@@ -8,7 +11,7 @@ categorical_columns_to_be_encoded = ['STOP_WAS_INITIATED']
 
 column_categories = {
     'datetime': ['STOP_FRISK_DATE'],
-    'numeric': ['STOP_ID', 'OBSERVED_DURATION_MINUTES', 'STOP_DURATION_MINUTES', 'SUSPECT_REPORTED_AGE',	'SUSPECT_WEIGHT', 'STOP_LOCATION_X',
+    'numeric': ['YEAR2', 'STOP_ID', 'OBSERVED_DURATION_MINUTES', 'STOP_DURATION_MINUTES', 'SUSPECT_REPORTED_AGE',	'SUSPECT_WEIGHT', 'STOP_LOCATION_X',
                 'STOP_LOCATION_Y'],
     'string': ['MONTH2', 'STOP_WAS_INITIATED', 'ISSUING_OFFICER_RANK', 'SUPERVISING_OFFICER_RANK', 'JURISDICTION_DESCRIPTION', 'SUSPECT_ARREST_OFFENSE',
                'SUMMONS_OFFENSE_DESCRIPTION', 'SUSPECTED_CRIME_DESCRIPTION',  'DEMEANOR_OF_PERSON_STOPPED', 'SUSPECT_SEX', 
@@ -111,6 +114,41 @@ def clean_data(df, categories, columns_to_keep=columns_to_keep):
     new_df = filter_bad_data(new_df)
     return new_df
 
+import pandas as pd
+from datetime import datetime
+
+def standardize_dates(date_str, output_format='%Y-%m-%d'):
+    """
+    Convert mixed-format date strings to a consistent format.
+    
+    Parameters:
+        date_str (str): Input date string in various formats
+        output_format (str): Desired output format (default: ISO format YYYY-MM-DD)
+    
+    Returns:
+        str: Date in standardized format, or pd.NA if parsing fails
+    """
+    # Common date formats to try (add more if needed)
+    possible_formats = [
+        '%m/%d/%Y', '%m/%d/%y',  # US-style dates (10/31/2023 or 10/31/23)
+        '%Y-%m-%d', '%y-%m-%d',  # ISO-style dates (2023-10-31 or 23-10-31)
+        '%d-%m-%Y', '%d-%m-%y',  # European-style dates (31-10-2023)
+        '%b %d, %Y', '%B %d, %Y'  # Text dates (Oct 31, 2023 or October 31, 2023)
+    ]
+    
+    if pd.isna(date_str):
+        return pd.NA
+    
+    for fmt in possible_formats:
+        try:
+            dt = datetime.strptime(str(date_str), fmt)
+            return dt.strftime(output_format)
+        except ValueError:
+            continue
+    
+    # If no format worked, return NA (or the original string if you prefer)
+    return pd.NA
+
 def is_valid_child(row):
     age = row['SUSPECT_REPORTED_AGE']
     height = row['SUSPECT_HEIGHT']
@@ -123,9 +161,6 @@ def is_valid_child(row):
     
     return (height >= expected_min) & (height <= expected_max)
 
-import geopandas as gpd
-from shapely.geometry import Point
-from pyproj import Transformer
 
 def stateplane_to_latlon(x, y):
     """Convert NY State Plane (ft) coordinates to WGS84 lat/lon"""
