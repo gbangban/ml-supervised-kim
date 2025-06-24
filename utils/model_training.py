@@ -130,33 +130,36 @@ def visualize_features(X, model, title='Top 15 Features Predicting Use of Force'
 
 def train_basic_cat_model(X_train, y_train, X_test, y_test):
         
-    cat_model = CatBoostClassifier(
+    model = CatBoostClassifier(
         iterations=1000,
         learning_rate=0.03,
         l2_leaf_reg=5,           # Increase regularization
         depth=5,
         loss_function='Logloss',
-        eval_metric='AUC',
+        # eval_metric='AUC', # To tightly fit the minority class/optimize recall
         scale_pos_weight=7,  # Balances positive class
         verbose=0,
         random_seed=42,
-        # eval_metric='F1',        # Monitor F1 during training
+        eval_metric='F1',        # Monitor F1 during training
         # use_best_model=True,     # Use best model by validation set
         # early_stopping_rounds=50,
         # verbose=100
     )
 
 
-    cat_model.fit(X_train, y_train)
-    y_proba = cat_model.predict_proba(X_test)[:, 1]
+    model.fit(X_train, y_train)
+    y_proba = model.predict_proba(X_test)[:, 1]
     y_pred = (y_proba >= 0.5).astype(int)
 
     # Evaluate
+    feature_importances = model.get_feature_importance()
     print(confusion_matrix(y_test, y_pred))
     print(classification_report(y_test, y_pred))
+    print_feature_importance_summary(feature_importances, X_train)
+    return model
 
-    # Get feature importances and names
-    feature_importances = cat_model.get_feature_importance()
+def print_feature_importance_summary(feature_importances, X_train):
+       # Get feature importances and names
     feature_names = X_train.columns
 
     # Sort features by importance (descending)
@@ -167,7 +170,6 @@ def train_basic_cat_model(X_train, y_train, X_test, y_test):
     print("Top Features:")
     for feat, imp in zip(sorted_features, sorted_importances):
         print(f"{feat}: {imp:.4f}")
-    return cat_model
 
 def train_basic_LR_model(X_train, y_train, X_test, y_test):
     scaler = StandardScaler()
@@ -175,10 +177,18 @@ def train_basic_LR_model(X_train, y_train, X_test, y_test):
     X_test_scaled = scaler.transform(X_test)
 
     # lr_model = LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42)
-    lr_model = LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42, C= 0.01, penalty= 'l1', solver= 'liblinear')
-    lr_model.fit(X_train_scaled, y_train)
+    model = LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42, C= 0.01, penalty= 'l1', solver= 'liblinear')
+    model.fit(X_train_scaled, y_train)
+    
+    # Get coefficients (feature importance)
+    if len(model.classes_) == 2:  # Binary classification
+        feature_importances = np.abs(model.coef_[0])
+    else:  # Multiclass (average across classes)
+        feature_importances = np.mean(np.abs(model.coef_), axis=0)
 
-    y_pred = lr_model.predict(X_test_scaled)
+    y_pred = model.predict(X_test_scaled)
 
     print(confusion_matrix(y_test, y_pred))
     print(classification_report(y_test, y_pred))
+    print_feature_importance_summary(feature_importances, X_train)
+    
